@@ -6,14 +6,14 @@ import (
 	"os"
 	"strconv"
 
-	sqliterepo "github.com/siavoid/task-manager/repo/sqlite_repo"
+	"github.com/siavoid/task-manager/repo/dbsqlite"
 	"github.com/siavoid/task-manager/tests"
 	"github.com/siavoid/task-manager/usecase/httpserver"
 )
 
 func main() {
 
-	db, err := sqliterepo.New()
+	db, err := dbsqlite.New()
 	if err != nil {
 		fmt.Print(err)
 		return

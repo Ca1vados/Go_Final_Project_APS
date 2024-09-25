@@ -9,8 +9,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/siavoid/task-manager/entity"
-	sqliterepo "github.com/siavoid/task-manager/repo/sqlite_repo"
+	"github.com/siavoid/task-manager/repo/dbsqlite"
 	"github.com/siavoid/task-manager/usecase"
+	cnst "github.com/siavoid/task-manager/usecase/constants"
 )
 
 // Server структура для HTTP-сервера
@@ -20,7 +21,7 @@ type Server struct {
 }
 
 // New создает новый экземпляр сервера
-func New(webDir string, db *sqliterepo.SqliteRepo) *Server {
+func New(webDir string, db *dbsqlite.DbSqlite) *Server {
 	u := usecase.New(db)
 	s := &Server{
 		Router: mux.NewRouter(),
@@ -60,7 +61,7 @@ func (s *Server) NextDateAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Разбор дат
-	now, err := time.Parse("20060102", nowStr)
+	now, err := time.Parse(cnst.DateFormat, nowStr)
 	if err != nil {
 		http.Error(w, "неверный формат даты для параметра 'now'.", http.StatusBadRequest)
 		return
@@ -112,22 +113,14 @@ func (s *Server) GetAllTasksAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type TaskResponse struct {
-		ID      string `json:"id"`
-		Date    string `json:"date"`
-		Title   string `json:"title"`
-		Comment string `json:"comment"`
-		Repeat  string `json:"repeat"`
-	}
-
 	var response struct {
-		Tasks []TaskResponse `json:"tasks"`
+		Tasks []entity.Task `json:"tasks"`
 	}
-	response.Tasks = make([]TaskResponse, 0)
+	response.Tasks = make([]entity.Task, 0)
 
 	for _, task := range tasks {
-		response.Tasks = append(response.Tasks, TaskResponse{
-			ID:      strconv.Itoa(task.ID), // Конвертация ID в строку
+		response.Tasks = append(response.Tasks, entity.Task{
+			ID:      task.ID,
 			Date:    task.Date,
 			Title:   task.Title,
 			Comment: task.Comment,
@@ -179,34 +172,14 @@ func (s *Server) GetTaskAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) UpdateTaskAPI(w http.ResponseWriter, r *http.Request) {
-	type TaskReq struct {
-		ID      string `json:"id"`
-		Date    string `json:"date"`
-		Title   string `json:"title"`
-		Comment string `json:"comment"`
-		Repeat  string `json:"repeat"`
-	}
 
-	var req TaskReq
+	var task entity.Task
 	// Декодируем JSON-запрос в структуру Task
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Некорректный запрос"})
 		return
 	}
 	defer r.Body.Close()
-	id, err := strconv.Atoi(req.ID)
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]string{"error": "Некорректный ID"})
-		return
-	}
-
-	task := entity.Task{
-		ID:      id,
-		Date:    req.Date,
-		Title:   req.Title,
-		Comment: req.Comment,
-		Repeat:  req.Repeat,
-	}
 
 	// Проверяем обязательные поля
 	if task.ID == 0 || task.Title == "" {
@@ -216,14 +189,14 @@ func (s *Server) UpdateTaskAPI(w http.ResponseWriter, r *http.Request) {
 
 	// Проверяем формат даты
 	if task.Date != "" {
-		if _, err := time.Parse("20060102", task.Date); err != nil {
+		if _, err := time.Parse(cnst.DateFormat, task.Date); err != nil {
 			json.NewEncoder(w).Encode(map[string]string{"error": "Некорректный формат даты"})
 			return
 		}
 	}
 
 	// Обновляем задачу
-	err = s.u.UpdateTask(task)
+	err := s.u.UpdateTask(task)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return

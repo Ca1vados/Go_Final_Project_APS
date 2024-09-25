@@ -1,13 +1,13 @@
 package usecase
 
 import (
-	sqliterepo "github.com/siavoid/task-manager/repo/sqlite_repo"
+	"github.com/siavoid/task-manager/repo/dbsqlite"
 )
 
 type Usecase struct {
-	db *sqliterepo.SqliteRepo
+	db *dbsqlite.DbSqlite
 }
 
-func New(db *sqliterepo.SqliteRepo) *Usecase {
+func New(db *dbsqlite.DbSqlite) *Usecase {
 	return &Usecase{db: db}
 }

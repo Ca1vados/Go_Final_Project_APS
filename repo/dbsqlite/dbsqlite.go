@@ -1,4 +1,4 @@
-package sqliterepo
+package dbsqlite
 
 import (
 	"database/sql"
@@ -12,16 +12,16 @@ import (
 	"github.com/siavoid/task-manager/entity"
 )
 
-// SqliteRepo предоставляет методы для взаимодействия с базой данных
-type SqliteRepo struct {
+// DbSqlite предоставляет методы для взаимодействия с базой данных
+type DbSqlite struct {
 	db *sql.DB
 }
 
 // New создает новое соединение с базой данных и инициализирует её, если необходимо
-func New() (*SqliteRepo, error) {
+func New() (*DbSqlite, error) {
 	appPath, err := os.Executable()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// Определяем путь к базе данных
@@ -60,11 +60,11 @@ func New() (*SqliteRepo, error) {
 		log.Println("Таблица scheduler и индекс созданы")
 	}
 
-	return &SqliteRepo{db: db}, nil
+	return &DbSqlite{db: db}, nil
 }
 
 // AddTask добавляет новую задачу в базу данных
-func (repo *SqliteRepo) CreateTask(task entity.Task) (int, error) {
+func (repo *DbSqlite) CreateTask(task entity.Task) (int, error) {
 	// Начинаем транзакцию
 	tx, err := repo.db.Begin()
 	if err != nil {
@@ -94,7 +94,7 @@ func (repo *SqliteRepo) CreateTask(task entity.Task) (int, error) {
 }
 
 // GetAllTasks возвращает все задачи из базы данных
-func (repo *SqliteRepo) GetAllTasks() ([]entity.Task, error) {
+func (repo *DbSqlite) GetAllTasks() ([]entity.Task, error) {
 	rows, err := repo.db.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date")
 	if err != nil {
 		return nil, err
@@ -110,17 +110,21 @@ func (repo *SqliteRepo) GetAllTasks() ([]entity.Task, error) {
 		tasks = append(tasks, task)
 	}
 
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return tasks, nil
 }
 
 // RemoveTask удаляет задачу по ID
-func (repo *SqliteRepo) RemoveTask(id int) error {
+func (repo *DbSqlite) RemoveTask(id int) error {
 	_, err := repo.db.Exec("DELETE FROM scheduler WHERE id = ?", id)
 	return err
 }
 
 // GetTask возвращает задачу по ID
-func (repo *SqliteRepo) GetTask(id int) (entity.Task, error) {
+func (repo *DbSqlite) GetTask(id int) (entity.Task, error) {
 	row := repo.db.QueryRow("SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?", id)
 
 	var task entity.Task
@@ -129,25 +133,29 @@ func (repo *SqliteRepo) GetTask(id int) (entity.Task, error) {
 }
 
 // UpdateTask обновляет задачу в базе данных
-func (repo *SqliteRepo) UpdateTask(task entity.Task) error {
-	// Проверяем существование задачи с данным ID
-	var exists bool
-	err := repo.db.QueryRow("SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)", task.ID).Scan(&exists)
+func (repo *DbSqlite) UpdateTask(task entity.Task) error {
+	result, err := repo.db.Exec(
+		"UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?",
+		task.Date, task.Title, task.Comment, task.Repeat, task.ID,
+	)
 	if err != nil {
-		return fmt.Errorf("ошибка проверки существования задачи: %w", err)
+		return fmt.Errorf("ошибка обновления задачи: %w", err)
 	}
 
-	if !exists {
-		return errors.New("задача не найдена")
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("ошибка получения количества обновленных строк: %w", err)
 	}
 
-	_, err = repo.db.Exec("UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?",
-		task.Date, task.Title, task.Comment, task.Repeat, task.ID)
-	return err
+	if rowsAffected == 0 {
+		return errors.New("задача не найдена, обновление не выполнено")
+	}
+
+	return nil
 }
 
 // dbPath возвращает путь к базе данных
-func (repo *SqliteRepo) dbPath() string {
+func (repo *DbSqlite) dbPath() string {
 	appPath, _ := os.Executable()
 	return filepath.Join(filepath.Dir(appPath), "scheduler.db")
 }

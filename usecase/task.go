@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/siavoid/task-manager/entity"
+	cnst "github.com/siavoid/task-manager/usecase/constants"
 )
 
 func (u *Usecase) CreateTask(task entity.Task) (int, error) {
@@ -17,23 +18,23 @@ func (u *Usecase) CreateTask(task entity.Task) (int, error) {
 	if task.Title == "" {
 		return 0, fmt.Errorf("Не указан заголовок задачи")
 	}
-	_, err := NextDate(now, now.Format("20060102"), task.Repeat)
+	_, err := NextDate(now, now.Format(cnst.DateFormat), task.Repeat)
 	if err != nil {
 		return 0, err
 	}
 
 	// Проверяем и обрабатываем поле Date
 	if task.Date == "" {
-		task.Date = now.Format("20060102")
+		task.Date = now.Format(cnst.DateFormat)
 	} else {
-		parsedDate, err := time.Parse("20060102", task.Date)
+		parsedDate, err := time.Parse(cnst.DateFormat, task.Date)
 		if err != nil {
 			return 0, fmt.Errorf("incorrect date format: %s", task.Date)
 		}
 
-		if parsedDate.Before(now) && parsedDate.Format("20060102") != now.Format("20060102") {
+		if parsedDate.Before(now) && parsedDate.Format(cnst.DateFormat) != now.Format(cnst.DateFormat) {
 			if task.Repeat == "" {
-				task.Date = now.Format("20060102")
+				task.Date = now.Format(cnst.DateFormat)
 			} else {
 				nextDate, err := NextDate(now, task.Date, task.Repeat)
 				if err != nil {
@@ -76,17 +77,30 @@ func (u *Usecase) GetTask(id int) (entity.Task, error) {
 }
 
 func (u *Usecase) UpdateTask(task entity.Task) error {
+	// Проверяем обязательные поля
 	if task.Title == "" {
-		return fmt.Errorf("Не указан заголовок задачи")
+		return errors.New("не указан заголовок задачи")
 	}
+
+	if task.ID == 0 {
+		return errors.New("не указан id задачи")
+	}
+
+	// Проверяем формат даты
+	if task.Date != "" {
+		if _, err := time.Parse(cnst.DateFormat, task.Date); err != nil {
+			return errors.New("некорректный формат даты")
+		}
+	}
+
 	now := time.Now()
 
-	_, err := NextDate(now, now.Format("20060102"), task.Repeat)
+	_, err := NextDate(now, now.Format(cnst.DateFormat), task.Repeat)
 	if err != nil {
 		return err
 	}
 
-	_, err = time.Parse("20060102", task.Date)
+	_, err = time.Parse(cnst.DateFormat, task.Date)
 	if err != nil {
 		return err
 	}
